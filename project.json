@@ -1,0 +1,24 @@
+{
+  "approved": true,
+  "description": "2017.10.31\n------------------------------------------\n重写了一下，CPU占用率应该降了一点（大概o(╯□╰)o），我笔记本上四年前的上古i7占用在7到8之间。\n\n大小应该能自动适应屏幕（大概o(╯□╰)o），我测试了下笔记本的900和台式的2K，目前没问题。\n\n做了一些变动，左右删掉了，因为太多会影响刷新速度。中间的圆也变了一下，具体可以看图。\n\n先这么着吧，作为一名[strike]沉迷游戏[/strike]学业繁重的研究生，我可是很忙的！o(´^｀)o\n\n另：想看源码的pong友，下载后在Steam\\steamapps\\workshop\\content里面有，翻出来index.html就行了。\n------------------------------------------\n看了下工坊里的音频动画，然后自己瞎写了一个。\n\n整个html就是个canvas，根据录音的数据画出来的。\n\n大小是比着我的笔记本设置的，1600*900，所以会可能会出现小屏幕挤作一团的情况。\n\n颜色是RGB循环变着的，截图只有一张绿的，而且没动。 \n\n所有参数想改的话都要在index.html里面直接改，因为我懒得一个个找然后设置出来了。(ˇωˇ」∠)_\n\n里面有些乱七八糟没用到的代码我也没删，就放在那吧o(╯□╰)o。。。\n\n想到哪是哪所以没有任何优化，慎用。或者你也可以自己改改",
+  "file": "index.html",
+  "general": {
+    "properties": {
+      "schemecolor": {
+        "order": 0,
+        "text": "ui_browse_properties_scheme_color",
+        "type": "color",
+        "value": "0 0 0"
+      }
+    },
+    "supportsaudioprocessing": true
+  },
+  "preview": "preview.jpg",
+  "tags": [
+    "Music"
+  ],
+  "title": "audiotest",
+  "type": "web",
+  "visibility": "public",
+  "workshopid": 964843911
+}

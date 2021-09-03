@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="">
+<head>
+    <meta charset="utf-8">
+    <title>Test</title>
+    <style media="screen">
+        canvas {
+            background: #000000;
+            position: absolute;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+<canvas id="canvas"></canvas>
+</body>
+</html>
+
+<script type="text/javascript">
+    //常量
+    let c_colorTime = 500;
+
+    //基本画布及缓存画布变量
+    const canvas = document.getElementById("canvas"),
+        context = canvas.getContext("2d"),
+        canvasBuffer = document.createElement("canvas"),//缓存，离屏画布预渲染
+        contextBuffer = canvasBuffer.getContext("2d");
+
+    //窗口变量
+    let width = canvas.width = canvasBuffer.width = window.innerWidth,
+        height = canvas.height = canvasBuffer.height = window.innerHeight;
+
+    //用户变量
+
+    //音频变量
+    let audioLeftFreqs = 0,//左
+        audioRightFreqs = 0,//右
+        audioFreqSum = 0,//和
+        audioFreqAvg = 0;//均
+
+    //颜色相关变量
+    let colorTime = c_colorTime,//每种颜色持续时间（为刷新次数，非真正时间单位，计数变量）
+        colorType = 1,
+        colorRGBA = "rgba(red,green,blue,opacity)",
+        colorRed = 255,
+        colorGreen = 20,
+        colorBlue = 20;
+
+
+    //速度（每次改变的角度）相关变量
+    let aMove1 = 0,//外环
+        aMove2 = 0,//16圆
+        aMove3 = 0,//中圆环
+        aMove4 = 0,//内三环_大
+        aMove5 = 0;//内三环_中
+
+    //信息变量（为了让每一次刷新前后动画变化幅度不那么大，保留前一次的信息即该部分目前的高度或元素数量，然后限制每次增加或减少的值。）
+    let leftStripArray = new Array(64),//左声道（左侧）条状音频动画信息数组
+        rightStripArray = new Array(64),//右
+        largeRingOutside = new Array(60),//最外圈外侧信息数组
+        largeRingInside = new Array(60),//内侧
+        smallRing = new Array(16),//小圈16圆信息数组
+        middleRingMain = 3,//中圈主环带
+        middleRingSecondary = 0;//中圈副环带
+
+    for (i = 0; i < 64; i++) {//初始化
+        leftStripArray[i] = rightStripArray[i] = 0;
+    }
+
+    for (i = 0; i < 60; i++) {//初始化
+        largeRingOutside[i] = largeRingInside[i] = 0;
+    }
+
+    for (i = 0; i < 16; i++) {
+        smallRing[i] = 0;
+    }
+
+    //尺寸变量
+    let posX = 0,
+        posY = 0,
+        posR = 0,
+        posX2 = 0,
+        posY2 = 0;
+
+    let r1_1 = 0,//内三环
+        r1_2 = 0,
+        r1_3 = 0,
+        r2 = 0,//16圆
+        r3_1 = 0,//中环
+        r3_2 = 0,
+        r3_3 = 0,
+        r4 = 0,//外内环
+        r5 = 0;//外外环
+
+    //加权变量
+    let v = 0;
+
+    let h1 = 0,//外内环
+        h2 = 0;//外外环
+
+    //其他变量
+    let rChange = 0;
+
+    let styleTemp = 0;
+    let lineTemp = 0;
+    let hTemp = 0;
+
+    //窗口及音频数据获取函数
+    window.onload = function () {
+        //音频监听
+        window.wallpaperRegisterAudioListener(wallpaperAudioListener);
+    }
+
+    function wallpaperAudioListener(audioArray) {
+        //注：audioArray是一个128元素数组，浮点数，前64个左声道，后64个右声道，频率由高到低。
+        audioLeftFreqs = audioArray.slice(0, 63);
+        audioRightFreqs = audioArray.slice(64, 127);
+        audioFreqSum = audioArray.reduce(function (pre, cur) {
+            return pre + cur;
+        }, 0);
+        audioFreqAvg = audioFreqSum / 128;
+    }
+
+    window.onresize = function () {
+        width = canvas.width = canvasBuffer.width = window.innerWidth;
+        height = canvas.height = canvasBuffer.height = window.innerHeight;
+    }
+
+    //主动画函数 - 3
+    function mainAnimation() {
+        bufferAnimation();
+        context.clearRect(0, 0, width, height);
+        context.drawImage(canvasBuffer, 0, 0);
+        requestAnimationFrame(mainAnimation);
+    }
+
+    //离屏缓存函数 - 3
+    function bufferAnimation() {
+        contextBuffer.clearRect(0, 0, width, height);
+        theSize();
+        colorChange();
+        //stripAnimation();
+        largeRingAnimation();
+        middleRingAnimation();
+        smallRingRoundAnimation();
+        smallRingArcAnimation();
+        angleChange();
+    }
+
+    //设置尺寸
+    function theSize() {
+        if (height < 1080) {
+            r1_1 = 5;
+            r1_2 = 20;
+            r1_3 = 40;
+            r2 = 60;
+            r3_1 = 200;
+            r3_2 = 210;
+            r3_3 = 220;
+            r4 = 340;
+            r5 = 360;
+            h1 = 200;
+            h2 = 200;
+            rChange = 0;
+        } else if (height < 1440) {
+            r1_1 = 5;
+            r1_2 = 20;
+            r1_3 = 40;
+            r2 = 60;
+            r3_1 = 200;
+            r3_2 = 210;
+            r3_3 = 220;
+            r4 = 380;
+            r5 = 400;
+            h1 = 200;
+            h2 = 200;
+            rChange = 0;
+        } else if (height >= 1440) {
+            r1_1 = 5;
+            r1_2 = 20;
+            r1_3 = 40;
+            r2 = 60;
+            r3_1 = 200;
+            r3_2 = 210;
+            r3_3 = 220;
+            r4 = 460;
+            r5 = 480;
+            h1 = 300;
+            h2 = 200;
+            rChange = 0;
+        }
+    }
+
+    //颜色变化函数 - 2.5
+    function colorChange() {
+        if (colorTime !== 0) {
+            colorTime--;
+        } else {
+            colorTime = c_colorTime;
+            colorType = colorType + 1 > 3 ? 1 : colorType + 1;
+        }
+
+        switch (true) {
+            case (colorType === 1 && colorRed < 255):
+                colorRed++;
+                colorGreen--;
+                colorBlue--;
+                break;
+            case (colorType === 2 && colorGreen < 255):
+                colorGreen++;
+                colorRed--;
+                colorBlue--;
+                break;
+            case (colorType === 3 && colorBlue < 255):
+                colorBlue++;
+                colorRed--;
+                colorGreen--;
+                break;
+        }
+
+        if (colorRed === 255) {
+            colorGreen = 20;
+            colorBlue = 20;
+        }
+        if (colorGreen === 255) {
+            colorRed = 20;
+            colorBlue = 20;
+        }
+        if (colorBlue === 255) {
+            colorRed = 20;
+            colorGreen = 20;
+        }
+
+        colorRGBA = "rgba(red,green,blue,opacity)".replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+    }
+
+    //角度变化函数 - 2.5
+    function angleChange() {
+        aMove1 = aMove1 + audioFreqAvg * 3 + 0.02;//外环
+        if (aMove1 >= 360) {
+            aMove1 = aMove1 - 360;
+        }
+
+        aMove2 = aMove2 + 0.3;//16圆
+        if (aMove2 >= 360) {
+            aMove2 = aMove2 - 360;
+        }
+
+        aMove3 = aMove3 + audioFreqAvg * 6 + 0.04;//中圆环
+        if (aMove3 >= 360) {
+            aMove3 = aMove3 - 360;
+        }
+
+        aMove4 = aMove4 + audioFreqAvg * 0.5 + 0.005;//内三环_大
+        if (aMove4 >= 360) {
+            aMove4 = aMove4 - 360;
+        }
+
+        aMove5 = aMove5 + audioFreqAvg * 0.5 + 0.01;//内三环_中
+        if (aMove5 >= 360) {
+            aMove5 = aMove5 - 360;
+        }
+    }
+
+    //内1-3层圆弧函数 - 2
+    function smallRingArcAnimation() {
+        styleTemp = colorRGBA.replace("opacity", 0.6 + audioFreqAvg * 4).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+        lineTemp = 2;
+        posR = r1_3;
+        myArc(styleTemp, lineTemp, width / 2, height / 2, posR, aMove4, Math.PI * 2 / 3 + aMove4, false);
+        myArc(styleTemp, lineTemp, width / 2, height / 2, posR, Math.PI + aMove4, Math.PI * 5 / 3 + aMove4, false);
+        posR = r1_2;
+        myArc(styleTemp, lineTemp, width / 2, height / 2, posR, 0 - aMove5, Math.PI / 3 - aMove5, false);
+        myArc(styleTemp, lineTemp, width / 2, height / 2, posR, Math.PI * 2 / 3 - aMove5, Math.PI - aMove5, false);
+        myArc(styleTemp, lineTemp, width / 2, height / 2, posR, Math.PI * 4 / 3 - aMove5, Math.PI * 5 / 3 - aMove5, false);
+        posR = (r1_1 + audioFreqAvg * 30) > 10 ? 10 : (r1_1 + audioFreqAvg * 30);
+        myArc(styleTemp, lineTemp, width / 2, height / 2, posR, 0, Math.PI * 2, false);
+    }
+
+    //内4层16圆球环函数 - 2
+    function smallRingRoundAnimation() {
+        for (let j = 0; j < 16; j++) {
+            if (j < 8) {
+                v = audioLeftFreqs[j * 8];
+            } else {
+                v = audioRightFreqs[j * 8 - 64];
+            }
+            if (v > 1) {
+                v = 1;
+            }
+            styleTemp = colorRGBA.replace("opacity", 0.4 + (audioFreqAvg * 80) / 20).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+            posX = Math.cos((j * 22.5 - aMove2) / 180 * Math.PI) * (r2) + width / 2;
+            posY = Math.sin((j * 22.5 - aMove2) / 180 * Math.PI) * (r2) + height / 2;
+            posR = 3 + v * 1;
+            myRound(styleTemp, posX, posY, posR);
+            lineTemp = 2;
+            styleTemp = colorRGBA.replace("opacity", 0.5).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+            posX = Math.cos((j * 22.5 - aMove2) / 180 * Math.PI) * (r2 - v * 20) + width / 2;
+            posY = Math.sin((j * 22.5 - aMove2) / 180 * Math.PI) * (r2 - v * 20) + height / 2;
+            posX2 = Math.cos((j * 22.5 - aMove2) / 180 * Math.PI) * (r2 + v * 120) + width / 2;
+            posY2 = Math.sin((j * 22.5 - aMove2) / 180 * Math.PI) * (r2 + v * 120) + height / 2;
+            myLine(styleTemp, lineTemp, posX, posY, posX2, posY2);
+
+            if (smallRing[j] <= v * 120) {
+                smallRing[j] = v * 120;
+            } else {
+                smallRing[j] = smallRing[j] - 1;
+            }
+            if (smallRing[j] <= 0) {
+                smallRing[j] = 0;
+            }
+            styleTemp = colorRGBA.replace("opacity", 0.5).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+            posX = Math.cos((j * 22.5 - aMove2) / 180 * Math.PI) * (r2 + smallRing[j]) + width / 2;
+            posY = Math.sin((j * 22.5 - aMove2) / 180 * Math.PI) * (r2 + smallRing[j]) + height / 2;
+            posR = 3;
+            myRound(styleTemp, posX, posY, posR);
+        }
+    }
+
+    //中5层圆球环函数 - 2
+    function middleRingAnimation() {
+        let i;
+        styleTemp = colorRGBA.replace("opacity", 0.5 + audioFreqAvg * 4).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+        posX = Math.cos((aMove3 + 90) / 180 * Math.PI) * (r3_2) + width / 2;
+        posY = Math.sin((aMove3 + 90) / 180 * Math.PI) * (r3_2) + height / 2;
+        posR = 6 + audioFreqAvg * 10;
+        myRound(styleTemp, posX, posY, posR);
+        posX = Math.cos((aMove3 + 210) / 180 * Math.PI) * (r3_2) + width / 2;
+        posY = Math.sin((aMove3 + 210) / 180 * Math.PI) * (r3_2) + height / 2;
+        myRound(styleTemp, posX, posY, posR);
+        posX = Math.cos((aMove3 + 330) / 180 * Math.PI) * (r3_2) + width / 2;
+        posY = Math.sin((aMove3 + 330) / 180 * Math.PI) * (r3_2) + height / 2;
+        myRound(styleTemp, posX, posY, posR);
+
+        if (middleRingMain < audioFreqAvg * 50) {
+            middleRingMain = middleRingMain + 0.5;
+        } else if (middleRingMain > audioFreqAvg * 50) {
+            middleRingMain = middleRingMain - 0.5;
+        }
+        if (middleRingMain <= 3 || audioFreqAvg * 50 < 1) {
+            middleRingMain = 3;
+        }
+        if (middleRingMain > 20) {
+            middleRingMain = 20;
+        }
+
+        for (i = 0; i < middleRingMain; i++) {
+            styleTemp = colorRGBA.replace("opacity", 0.5 + audioFreqAvg * 4 - i * 0.08).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+            posX = Math.cos((aMove3 + 90 + (i + 1) * 5) / 180 * Math.PI) * (r3_1) + width / 2;
+            posY = Math.sin((aMove3 + 90 + (i + 1) * 5) / 180 * Math.PI) * (r3_1) + height / 2;
+            posR = 4 - 0.1 * (i + 1);
+            myRound(styleTemp, posX, posY, posR);
+            posX = Math.cos((aMove3 + 210 + (i + 1) * 5) / 180 * Math.PI) * (r3_1) + width / 2;
+            posY = Math.sin((aMove3 + 210 + (i + 1) * 5) / 180 * Math.PI) * (r3_1) + height / 2;
+            myRound(styleTemp, posX, posY, posR);
+            posX = Math.cos((aMove3 + 330 + (i + 1) * 5) / 180 * Math.PI) * (r3_1) + width / 2;
+            posY = Math.sin((aMove3 + 330 + (i + 1) * 5) / 180 * Math.PI) * (r3_1) + height / 2;
+            myRound(styleTemp, posX, posY, posR);
+            posX = Math.cos((aMove3 + 90 - (i + 1) * 5) / 180 * Math.PI) * (r3_1) + width / 2;
+            posY = Math.sin((aMove3 + 90 - (i + 1) * 5) / 180 * Math.PI) * (r3_1) + height / 2;
+            myRound(styleTemp, posX, posY, posR);
+            posX = Math.cos((aMove3 + 210 - (i + 1) * 5) / 180 * Math.PI) * (r3_1) + width / 2;
+            posY = Math.sin((aMove3 + 210 - (i + 1) * 5) / 180 * Math.PI) * (r3_1) + height / 2;
+            myRound(styleTemp, posX, posY, posR);
+            posX = Math.cos((aMove3 + 330 - (i + 1) * 5) / 180 * Math.PI) * (r3_1) + width / 2;
+            posY = Math.sin((aMove3 + 330 - (i + 1) * 5) / 180 * Math.PI) * (r3_1) + height / 2;
+            myRound(styleTemp, posX, posY, posR);
+        }
+
+        if (middleRingSecondary < audioFreqAvg * 30) {
+            middleRingSecondary = middleRingSecondary + 0.5;
+        } else if (middleRingSecondary > audioFreqAvg * 30) {
+            middleRingSecondary = middleRingSecondary - 0.5;
+        }
+        if (middleRingSecondary <= 0 || audioFreqAvg * 30 < 1) {
+            middleRingSecondary = 0;
+        }
+        if (middleRingSecondary > 18) {
+            middleRingSecondary = 18;
+        }
+
+        for (i = 0; i < middleRingSecondary; i++) {
+            styleTemp = colorRGBA.replace("opacity", 0.5 + audioFreqAvg * 4 - i * 0.1).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+            posX = Math.cos((aMove3 + 90 + (i + 1) * 5) / 180 * Math.PI) * (r3_3) + width / 2;
+            posY = Math.sin((aMove3 + 90 + (i + 1) * 5) / 180 * Math.PI) * (r3_3) + height / 2;
+            posR = 4 - 0.1 * (i + 1);
+            myRound(styleTemp, posX, posY, posR);
+            posX = Math.cos((aMove3 + 210 + (i + 1) * 5) / 180 * Math.PI) * (r3_3) + width / 2;
+            posY = Math.sin((aMove3 + 210 + (i + 1) * 5) / 180 * Math.PI) * (r3_3) + height / 2;
+            myRound(styleTemp, posX, posY, posR);
+            posX = Math.cos((aMove3 + 330 + (i + 1) * 5) / 180 * Math.PI) * (r3_3) + width / 2;
+            posY = Math.sin((aMove3 + 330 + (i + 1) * 5) / 180 * Math.PI) * (r3_3) + height / 2;
+            myRound(styleTemp, posX, posY, posR);
+            posX = Math.cos((aMove3 + 90 - (i + 1) * 5) / 180 * Math.PI) * (r3_3) + width / 2;
+            posY = Math.sin((aMove3 + 90 - (i + 1) * 5) / 180 * Math.PI) * (r3_3) + height / 2;
+            myRound(styleTemp, posX, posY, posR);
+            posX = Math.cos((aMove3 + 210 - (i + 1) * 5) / 180 * Math.PI) * (r3_3) + width / 2;
+            posY = Math.sin((aMove3 + 210 - (i + 1) * 5) / 180 * Math.PI) * (r3_3) + height / 2;
+            myRound(styleTemp, posX, posY, posR);
+            posX = Math.cos((aMove3 + 330 - (i + 1) * 5) / 180 * Math.PI) * (r3_3) + width / 2;
+            posY = Math.sin((aMove3 + 330 - (i + 1) * 5) / 180 * Math.PI) * (r3_3) + height / 2;
+            myRound(styleTemp, posX, posY, posR);
+        }
+    }
+
+    //外6层函数 - 2
+    function largeRingAnimation() {
+        let i;
+        for (i = 0; i < 30; i++) {
+            v = audioLeftFreqs[i];
+
+            styleTemp = colorRGBA.replace("opacity", 1).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+            posX = Math.cos((i * 3 - aMove1) / 180 * Math.PI) * (r4 - audioFreqAvg * rChange) + width / 2;
+            posY = Math.sin((i * 3 - aMove1) / 180 * Math.PI) * (r4 - audioFreqAvg * rChange) + height / 2;
+            posR = 3;
+            myRound(styleTemp, posX, posY, posR);
+
+            lineTemp = 1.5;
+            posX = Math.cos((i * 3 - aMove1) / 180 * Math.PI) * (r4 - audioFreqAvg * rChange) + width / 2;
+            posY = Math.sin((i * 3 - aMove1) / 180 * Math.PI) * (r4 - audioFreqAvg * rChange) + height / 2;
+            posX2 = Math.cos((i * 3 - aMove1) / 180 * Math.PI) * ((r4 - audioFreqAvg * rChange) - v * h1 > r3_3 ? (r4 - audioFreqAvg * rChange) - v * h1 : r3_3) + width / 2;
+            posY2 = Math.sin((i * 3 - aMove1) / 180 * Math.PI) * ((r4 - audioFreqAvg * rChange) - v * h1 > r3_3 ? (r4 - audioFreqAvg * rChange) - v * h1 : r3_3) + height / 2;
+            myLine(styleTemp, lineTemp, posX, posY, posX2, posY2);
+
+            if (largeRingInside[i] < v * h1) {
+                largeRingInside[i] = v * h1;
+            } else {
+                largeRingInside[i] = largeRingInside[i] - 1;
+            }
+            if (largeRingInside[i] >= r4 - r3_3) {
+                largeRingInside[i] = r4 - r3_3;
+            }
+
+            styleTemp = colorRGBA.replace("opacity", 0.5).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+            posX = Math.cos((i * 3 - aMove1) / 180 * Math.PI) * ((r4 - audioFreqAvg * rChange) - largeRingInside[i] > r3_3 ? (r4 - audioFreqAvg * rChange) - largeRingInside[i] : r3_3) + width / 2;
+            posY = Math.sin((i * 3 - aMove1) / 180 * Math.PI) * ((r4 - audioFreqAvg * rChange) - largeRingInside[i] > r3_3 ? (r4 - audioFreqAvg * rChange) - largeRingInside[i] : r3_3) + height / 2;
+            posR = 3;
+            myRound(styleTemp, posX, posY, posR);
+
+            //
+
+            v = audioRightFreqs[i];
+
+            styleTemp = colorRGBA.replace("opacity", 1).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+            posX = Math.cos((i * 3 + 180 - aMove1) / 180 * Math.PI) * (r4 - audioFreqAvg * rChange) + width / 2;
+            posY = Math.sin((i * 3 + 180 - aMove1) / 180 * Math.PI) * (r4 - audioFreqAvg * rChange) + height / 2;
+            posR = 3;
+            myRound(styleTemp, posX, posY, posR);
+
+            posX = Math.cos((i * 3 + 180 - aMove1) / 180 * Math.PI) * (r4 - audioFreqAvg * rChange) + width / 2;
+            posY = Math.sin((i * 3 + 180 - aMove1) / 180 * Math.PI) * (r4 - audioFreqAvg * rChange) + height / 2;
+            posX2 = Math.cos((i * 3 + 180 - aMove1) / 180 * Math.PI) * ((r4 - audioFreqAvg * rChange) - v * h1 > r3_3 ? (r4 - audioFreqAvg * rChange) - v * h1 : r3_3) + width / 2;
+            posY2 = Math.sin((i * 3 + 180 - aMove1) / 180 * Math.PI) * ((r4 - audioFreqAvg * rChange) - v * h1 > r3_3 ? (r4 - audioFreqAvg * rChange) - v * h1 : r3_3) + height / 2;
+            myLine(styleTemp, lineTemp, posX, posY, posX2, posY2);
+
+            if (largeRingInside[i + 30] < v * h1) {
+                largeRingInside[i + 30] = v * h1;
+            } else {
+                largeRingInside[i + 30] = largeRingInside[i + 30] - 1;
+            }
+            if (largeRingInside[i + 30] >= r4 - r3_3) {
+                largeRingInside[i + 30] = r4 - r3_3;
+            }
+
+            styleTemp = colorRGBA.replace("opacity", 0.5).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+            posX = Math.cos((i * 3 + 180 - aMove1) / 180 * Math.PI) * ((r4 - audioFreqAvg * rChange) - largeRingInside[i + 30] > r3_3 ? (r4 - audioFreqAvg * rChange) - largeRingInside[i + 30] : r3_3) + width / 2;
+            posY = Math.sin((i * 3 + 180 - aMove1) / 180 * Math.PI) * ((r4 - audioFreqAvg * rChange) - largeRingInside[i + 30] > r3_3 ? (r4 - audioFreqAvg * rChange) - largeRingInside[i + 30] : r3_3) + height / 2;
+            posR = 3;
+            myRound(styleTemp, posX, posY, posR);
+        }
+
+        for (i = 30; i < 60; i++) {
+            let j;
+            v = audioLeftFreqs[i];
+
+            hTemp = r5 + v * h2;
+            if (hTemp < r5 + 3) {
+                hTemp = r5;
+            }
+            if (largeRingOutside[i - 30] < (hTemp - r5) / 10) {
+                largeRingOutside[i - 30] = largeRingOutside[i - 30] + 0.5;
+            } else if (largeRingOutside[i - 30] > (hTemp - r5) / 10) {
+                largeRingOutside[i - 30] = largeRingOutside[i - 30] - 0.5;
+            }
+            if (largeRingOutside[i - 30] === 0) {
+                largeRingOutside[i - 30] = 1;
+            }
+
+            for (j = 0; j < largeRingOutside[i - 30]; j++) {
+                styleTemp = colorRGBA.replace("opacity", 1 - (j * 10) / (r5 - 240)).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+                posX = Math.cos((i * 3 - 180 + aMove1) / 180 * Math.PI) * (r5 + j * 10 + audioFreqAvg * rChange) + width / 2;
+                posY = Math.sin((i * 3 - 180 + aMove1) / 180 * Math.PI) * (r5 + j * 10 + audioFreqAvg * rChange) + height / 2;
+                posR = 3;
+                myRound(styleTemp, posX, posY, posR);
+            }
+
+            //
+
+            v = audioRightFreqs[i];
+
+            hTemp = r5 + v * h2;
+            if (hTemp < r5 + 3) {
+                hTemp = r5;
+            }
+            if (largeRingOutside[i] < (hTemp - r5) / 10) {
+                largeRingOutside[i] = largeRingOutside[i] + 0.5;
+            } else if (largeRingOutside[i] > (hTemp - r5) / 10) {
+                largeRingOutside[i] = largeRingOutside[i] - 0.5;
+            }
+            if (largeRingOutside[i] === 0) {
+                largeRingOutside[i] = 1;
+            }
+
+            for (j = 0; j < largeRingOutside[i]; j++) {
+                styleTemp = colorRGBA.replace("opacity", 1 - (j * 10) / (r5 - 240)).replace("red", colorRed).replace("green", colorGreen).replace("blue", colorBlue);
+                posX = Math.cos((i * 3 + aMove1) / 180 * Math.PI) * (r5 + j * 10 + audioFreqAvg * rChange) + width / 2;
+                posY = Math.sin((i * 3 + aMove1) / 180 * Math.PI) * (r5 + j * 10 + audioFreqAvg * rChange) + height / 2;
+                posR = 3;
+                myRound(styleTemp, posX, posY, posR);
+            }
+        }
+    }
+
+    //左右垂直动画函数 - 2
+    /*function stripAnimation(){
+
+    }*/
+
+    //画圆 - 1
+    function myRound(style, x, y, r) {
+        contextBuffer.beginPath();
+        contextBuffer.fillStyle = style;
+        contextBuffer.arc(x, y, r, 0, 2 * Math.PI, false);
+        contextBuffer.fill();
+        contextBuffer.closePath();
+    }
+
+    //画线 - 1
+    function myLine(style, lineWidth, x1, y1, x2, y2) {
+        contextBuffer.beginPath();
+        contextBuffer.strokeStyle = style;
+        contextBuffer.lineWidth = lineWidth;
+        contextBuffer.moveTo(x1, y1);
+        contextBuffer.lineTo(x2, y2);
+        contextBuffer.stroke();
+        contextBuffer.closePath();
+    }
+
+    //画圆弧 - 1
+    function myArc(style, lineWidth, x, y, r, start, end, clock) {
+        contextBuffer.beginPath();
+        contextBuffer.strokeStyle = style;
+        contextBuffer.lineWidth = lineWidth;
+        contextBuffer.arc(x, y, r, start, end, clock);
+        contextBuffer.stroke();
+        contextBuffer.closePath();
+    }
+
+    mainAnimation();//执行
+
+</script>
